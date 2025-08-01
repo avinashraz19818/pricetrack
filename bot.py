@@ -9,7 +9,7 @@ from utils.price_suggester import suggest_prices
 from scraper.amazon import scrape_amazon
 from scraper.flipkart import scrape_flipkart
 from scraper.myntra import scrape_myntra
-from handlers.alert_handler import alerts.json
+from handlers.alert_handler import save_alert
 
 logging.basicConfig(level=logging.INFO)
 
