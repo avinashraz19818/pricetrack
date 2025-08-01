@@ -4,3 +4,6 @@ aiogram
 apscheduler
 aiohttp
 python-dotenv
+aiogram>=3.0.0
+aiohttp
+python-dotenv
