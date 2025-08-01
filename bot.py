@@ -13,7 +13,7 @@ from handlers.alert_handler import save_alerts_to_file
 
 logging.basicConfig(level=logging.INFO)
 
-bot = Bot(token=BOT_TOKEN, parse_mode=ParseMode.HTML)
+bot = Bot(token=8172191909:AAHfMFVym9PLLgYAaYojpQs2zZyfyv-qs_E, parse_mode=ParseMode.HTML)
 dp = Dispatcher()
 
 # Temporary in-memory user context for alert price setting
