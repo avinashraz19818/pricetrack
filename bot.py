@@ -6,9 +6,9 @@ from aiogram.enums import ParseMode
 from aiogram.filters import Command
 from config import BOT_TOKEN, CHANNEL_ID
 from utils.price_suggester import suggest_prices
-from scraper.amazon import get_amazon_price
-from scraper.flipkart import get_flipkart_price
-from scraper.myntra import get_myntra_price
+from scraper.amazon import scrape_amazon
+from scraper.flipkart import scrape_flipkart
+from scraper.myntra import scrape_myntra
 from handlers.alert_handler import save_alert
 
 logging.basicConfig(level=logging.INFO)
