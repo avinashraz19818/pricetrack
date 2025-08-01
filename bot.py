@@ -1,7 +1,9 @@
 import asyncio
 import logging
-from aiogram import Bot, Dispatcher, executor, types
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram import Bot, Dispatcher, F
+from aiogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery
+from aiogram.enums import ParseMode
+from aiogram.filters import Command
 from config import BOT_TOKEN, CHANNEL_ID
 from utils.price_suggester import suggest_prices
 from scraper.amazon import get_amazon_price
@@ -11,11 +13,12 @@ from handlers.alert_handler import save_alert
 
 logging.basicConfig(level=logging.INFO)
 
-bot = Bot(token=BOT_TOKEN, parse_mode="HTML")
-dp = Dispatcher(bot)
+bot = Bot(token=BOT_TOKEN, parse_mode=ParseMode.HTML)
+dp = Dispatcher()
 
 # Temporary in-memory user context for alert price setting
 user_context = {}
+
 
 # ------------------ FORCE JOIN CHECK ------------------ #
 async def check_subscription(user_id):
@@ -26,13 +29,16 @@ async def check_subscription(user_id):
         return False
 
 
-@dp.message_handler(commands=['start'])
-async def start_handler(message: types.Message):
+# ------------------ /start Command ------------------ #
+@dp.message(Command("start"))
+async def start_handler(message: Message):
     user_id = message.from_user.id
     joined = await check_subscription(user_id)
     if not joined:
-        join_btn = InlineKeyboardMarkup().add(
-            InlineKeyboardButton("🔔 Join Our Channel", url=f"https://t.me/c/{str(CHANNEL_ID).replace('-100', '')}"),
+        join_btn = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text="🔔 Join Our Channel", url=f"https://t.me/c/{str(CHANNEL_ID).replace('-100', '')}")]
+            ]
         )
         await message.answer("🚨 To use this bot, please join our deals channel first!", reply_markup=join_btn)
         return
@@ -40,9 +46,9 @@ async def start_handler(message: types.Message):
     await message.answer("👋 Welcome to Price Tracker Bot!\n\nJust send me any product link from Flipkart, Amazon, or Myntra to get started.")
 
 
-# ------------------ PRODUCT LINK HANDLER ------------------ #
-@dp.message_handler(lambda message: any(x in message.text for x in ['amazon.in', 'flipkart.com', 'myntra.com']))
-async def handle_product_link(message: types.Message):
+# ------------------ Product Link Handler ------------------ #
+@dp.message(F.text.contains("amazon.in") | F.text.contains("flipkart.com") | F.text.contains("myntra.com"))
+async def handle_product_link(message: Message):
     link = message.text
     product_name = "Example Product"  # Optional: add scraping for dynamic title
 
@@ -61,25 +67,26 @@ async def handle_product_link(message: types.Message):
             prices.append(("Myntra", price, link))
 
     if not prices:
-        await message.reply("❌ Sorry, I couldn't fetch prices for this product.")
+        await message.answer("❌ Sorry, I couldn't fetch prices for this product.")
         return
 
     response = f"📦 <b>{product_name}</b>\n\n🔍 <b>Available On:</b>\n"
-    buttons = InlineKeyboardMarkup(row_width=2)
+    buttons = []
 
     for platform, price, url in prices:
         response += f"{platform}: ₹{price}\n"
-        buttons.add(
+        buttons.append([
             InlineKeyboardButton(f"🛒 {platform} - Buy Now", url=url),
             InlineKeyboardButton(f"⏰ Set Alert - {platform}", callback_data=f"alert|{platform}|{price}|{url}")
-        )
+        ])
 
-    await message.answer(response, reply_markup=buttons)
+    markup = InlineKeyboardMarkup(inline_keyboard=buttons)
+    await message.answer(response, reply_markup=markup)
 
 
-# ------------------ ALERT BUTTON HANDLER ------------------ #
-@dp.callback_query_handler(lambda c: c.data.startswith("alert|"))
-async def handle_alert_btn(callback_query: types.CallbackQuery):
+# ------------------ Alert Button Callback ------------------ #
+@dp.callback_query(F.data.startswith("alert|"))
+async def handle_alert_btn(callback_query: CallbackQuery):
     _, platform, price, url = callback_query.data.split("|")
     suggested = suggest_prices(int(price))
 
@@ -98,25 +105,28 @@ async def handle_alert_btn(callback_query: types.CallbackQuery):
     }
 
 
-@dp.message_handler(lambda message: message.text.isdigit())
-async def set_alert_price(message: types.Message):
+# ------------------ Alert Price Input ------------------ #
+@dp.message(F.text.regexp(r"^\d+$"))
+async def set_alert_price(message: Message):
     data = user_context.get(message.from_user.id)
     if not data:
         return  # Not a reply to alert setup
 
     target_price = int(message.text)
     save_alert(message.from_user.id, data["platform"], data["url"], target_price)
-    await message.reply(f"✅ Alert set! You'll be notified when price drops to ₹{target_price} or below.")
-
+    await message.answer(f"✅ Alert set! You'll be notified when price drops to ₹{target_price} or below.")
     user_context.pop(message.from_user.id, None)  # Clear context
 
 
-# ------------------ DEFAULT HANDLER ------------------ #
-@dp.message_handler()
-async def fallback(message: types.Message):
-    await message.reply("❗ Please send a valid product link from Amazon, Flipkart, or Myntra.")
+# ------------------ Fallback for Other Text ------------------ #
+@dp.message()
+async def fallback(message: Message):
+    await message.answer("❗ Please send a valid product link from Amazon, Flipkart, or Myntra.")
 
 
-# ------------------ MAIN ------------------ #
-if __name__ == '__main__':
-    executor.start_polling(dp, skip_updates=True)
+# ------------------ Main ------------------ #
+async def main():
+    await dp.start_polling(bot)
+
+if __name__ == "__main__":
+    asyncio.run(main())
